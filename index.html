@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QA Manager</title>
+  <link rel="stylesheet" href="./src/styles/base.css">
+  <link rel="stylesheet" href="./src/styles/theme.css">
+  <script type="module">
+    // Dark mode: apply user's last choice ASAP
+    const saved = localStorage.getItem("qa_dark_mode");
+    if (saved === "true") document.documentElement.classList.add("dark");
+  </script>
+  <!-- Firebase v10 CDN ESM -->
+  <script type="module">
+    // Preload Firebase SDKs (modules will import them again as needed)
+    import "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  </script>
+</head>
+<body class="app-body">
+  <header class="app-header">
+    <div class="brand">
+      <span class="logo">🧪</span>
+      <h1>QA MANAGER</h1>
+      <p class="subtitle">Orquestre lojas, ambientes, suítes de testes e execuções em um só lugar</p>
+    </div>
+    <div class="header-actions">
+      <button id="toggleThemeBtn" class="btn ghost" title="Alternar tema">🌓</button>
+      <div id="userArea" class="user-area">
+        <span id="welcomeName"></span>
+        <button id="logoutBtn" class="btn danger small">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Auth View -->
+  <main id="authView" class="view">
+    <section class="card auth-card">
+      <h2>Entrar</h2>
+      <form id="loginForm" class="form">
+        <label>Email<input type="email" id="loginEmail" required></label>
+        <label>Senha<input type="password" id="loginPassword" required></label>
+        <button class="btn primary" type="submit">Entrar</button>
+      </form>
+      <hr/>
+      <h3>Criar Conta</h3>
+      <form id="registerForm" class="form">
+        <label>Nome<input type="text" id="registerName" required></label>
+        <label>Email<input type="email" id="registerEmail" required></label>
+        <label>Senha<input type="password" id="registerPassword" required></label>
+        <div class="row">
+          <label class="checkbox">
+            <input type="checkbox" id="registerDarkMode"> Preferir Dark Mode
+          </label>
+        </div>
+        <button class="btn success" type="submit">Cadastrar</button>
+      </form>
+    </section>
+  </main>
+
+  <!-- App View -->
+  <main id="appView" class="view hidden">
+    <nav class="tabs">
+      <button data-tab="stores" class="tab active">Lojas</button>
+      <button data-tab="tasks" class="tab">Andamento</button>
+    </nav>
+
+    <!-- STORES TAB -->
+    <section id="tab-stores" class="tab-panel">
+      <div class="panel-header">
+        <h2>Painel de Lojas</h2>
+        <div class="actions">
+          <button id="openCreateStoreModal" class="btn primary">+ Nova Loja</button>
+        </div>
+      </div>
+      <div id="storesGrid" class="grid"></div>
+
+      <!-- Store Detail -->
+      <section id="storeDetail" class="store-detail hidden">
+        <div class="store-header">
+          <h3 id="storeTitle">Loja</h3>
+          <div class="store-summary">
+            <span>Site: <strong id="storeSite"></strong></span>
+            <span>Total de Cenários: <strong id="storeScenarioCount">0</strong></span>
+            <span>Qtde de Suítes: <strong id="storeSuiteCount">0</strong></span>
+          </div>
+        </div>
+
+        <!-- Categories -->
+        <section class="card">
+          <h4>Categorias</h4>
+          <div id="categoryChips" class="chips"></div>
+          <p class="muted">Selecione uma ou mais categorias para exibir cenários. Sem seleção → nenhum cenário é exibido.</p>
+        </section>
+
+        <!-- Scenarios Table & CRUD -->
+        <section class="card">
+          <div class="row between">
+            <h4>Cenários</h4>
+            <div class="row gap">
+              <button id="openCreateScenario" class="btn">+ Cenário</button>
+              <label class="btn">
+                Importar CSV
+                <input id="csvInput" type="file" accept=".csv" hidden />
+              </label>
+              <button id="downloadCsvTemplate" class="btn ghost">Baixar modelo CSV</button>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table id="scenariosTable" class="table">
+              <thead>
+                <tr>
+                  <th data-sort="criticidade">Criticidade</th>
+                  <th data-sort="categoria">Categoria</th>
+                  <th data-sort="execucao">Execução</th>
+                  <th data-sort="nomeTeste">Nome do teste</th>
+                  <th data-sort="desktop">Desktop</th>
+                  <th data-sort="mobile">Mobile</th>
+                  <th data-sort="status">Status</th>
+                  <th>Observações</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="scenariosTbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Suites -->
+        <section class="card">
+          <div class="row between">
+            <h4>Suítes de Teste</h4>
+            <div class="row gap">
+              <input id="suiteName" class="input" placeholder="Nome da suíte">
+              <button id="createSuiteBtn" class="btn">Criar Suíte</button>
+              <select id="exportSuiteSelect" class="input"></select>
+              <select id="exportEnvSelect" class="input">
+                <option value="dev">dev</option>
+                <option value="qa">qa</option>
+                <option value="hml">hml</option>
+                <option value="prod">prod</option>
+              </select>
+              <button id="exportMdBtn" class="btn ghost">Exportar Markdown</button>
+            </div>
+          </div>
+          <div id="suiteBuilder" class="suite-builder">
+            <p class="muted">Marque os cenários abaixo para compor a suíte desta loja.</p>
+            <div id="suiteScenarioList" class="grid grid-2"></div>
+          </div>
+        </section>
+      </section>
+    </section>
+
+    <!-- TASKS TAB -->
+    <section id="tab-tasks" class="tab-panel hidden">
+      <div class="panel-header">
+        <h2>Andamento de Testes</h2>
+        <div class="actions">
+          <button id="createTaskBtn" class="btn primary">+ Nova Tarefa</button>
+        </div>
+      </div>
+      <div id="tasksGrid" class="grid"></div>
+
+      <!-- Task Detail Drawer -->
+      <aside id="taskDrawer" class="drawer hidden">
+        <div class="drawer-header">
+          <h3 id="taskTitle">Tarefa</h3>
+          <button id="closeTaskDrawer" class="btn ghost">✖</button>
+        </div>
+        <div class="drawer-content">
+          <p id="taskMeta" class="muted"></p>
+          <div class="progress">
+            <div id="taskProgressBar" class="bar"></div>
+          </div>
+
+          <h4>Cenários da Suíte</h4>
+          <table class="table small">
+            <thead>
+              <tr>
+                <th>Loja</th>
+                <th>Categoria</th>
+                <th>Nome</th>
+                <th>Status</th>
+                <th>Executar</th>
+              </tr>
+            </thead>
+            <tbody id="taskRunsTbody"></tbody>
+          </table>
+
+          <h4>Bugs (JIRA)</h4>
+          <div id="bugsList" class="list"></div>
+          <div class="row gap">
+            <input id="bugTitle" class="input" placeholder="Título do bug">
+            <input id="bugUrl" class="input" placeholder="URL do JIRA">
+            <button id="addBugBtn" class="btn">Adicionar Bug</button>
+          </div>
+
+          <div class="row between mt-2">
+            <button id="archiveTaskBtn" class="btn danger">Arquivar Tarefa</button>
+            <button id="inviteToTaskBtn" class="btn ghost">Convidar usuário</button>
+          </div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <!-- Modals -->
+  <dialog id="storeModal" class="modal">
+    <form id="storeForm" class="form" method="dialog">
+      <h3>Nova Loja</h3>
+      <label>Nome da loja<input id="storeName" required></label>
+      <label>Site (URL)<input id="storeSiteInput" type="url" placeholder="https://"></label>
+      <label>Descrição<textarea id="storeDescription"></textarea></label>
+      <div class="row">
+        <label class="checkbox"><input type="checkbox" checked disabled> Ambientes padrão: dev, qa, hml, prod</label>
+      </div>
+      <menu>
+        <button value="cancel" class="btn ghost">Cancelar</button>
+        <button id="saveStoreBtn" value="default" class="btn primary">Salvar</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>

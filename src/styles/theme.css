@@ -1,0 +1,5 @@
+/* Light theme if html has class 'light', otherwise dark by default */
+:root{}
+html:not(.dark){}
+:root, html.dark{}
+/* We switch themes by toggling `html.dark` class. */
